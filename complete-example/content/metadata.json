@@ -1,14 +1,16 @@
 {
-	"name": "SoundCloud",
-	"pluginName": "soundcloud",
-	"author": "Thierry Göckel",
-	"email": "thierry@strayrayday.lu",
-	"version": "0.9.7",
+	"name": "Minimal Complete Verifiable Example",
+	"pluginName": "example", 
+	"author": "Will Stott",
+	"email": "willstott101@gmail.com",
+	"version": "0.0.1",
 	"website": "http://gettomahawk.com",
-	"description": "Resolves to playable tracks on SoundCloud, including live, cover and remixed versions if specified.",
+	"description": "This is an mcve resolver which you can be used as a template for your own.",
+	
+
 	"type": "resolver/javascript",
 	"manifest": {
-		"main": "contents/code/soundcloud.js",
+		"main": "contents/code/example.js",
 		"scripts": [],
 		"icon": "contents/images/icon.png",
 		"resources": [

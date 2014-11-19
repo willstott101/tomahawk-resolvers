@@ -1,0 +1,58 @@
+{
+	///////////////////////////////////////////
+	// WARNING BEFORE USING THIS DOCUMENT
+	// Comments are not valid in .json files.
+	// Be sure to remove any before trying to install a resolver.
+	///////////////////////////////////////////
+
+	// Friendly name (REQUIRED)
+		// Usually: Service Name [Metadata], is fine.
+		// 	Note: It is NOT neccessary to seperate metadata and track resolvers.
+		// 	  Only put Metadata in the name if you do seperate them.
+
+		// eg. "SoundCloud", "Deezer Metadata" ...
+	"name": "Minimal Complete Verifiable Example",
+
+	// Unique Identifier (REQUIRED)
+		// Avoid using ones already used at:
+			// https://github.com/tomahawk-player/tomahawk-synchrotron
+
+		// eg. "soundcloud", deezer-metadata"
+	"pluginName": "example",
+
+	// Version of this resolver (REQUIRED)
+		// You only need to change this for new axe releases.
+		// For in-development versions, the git revision is used.
+	"version": "0.0.1",
+
+	// Website link.
+		// Presumably resolver's website, but seems to always be this.
+		// For the sake of status quo, leave it.
+	"website": "http://gettomahawk.com",
+
+	// Your name
+		// Displayed in Tomahawk.
+	"author": "Will Stott",
+
+	// Your email
+		// Not visible in the UI. Used by other developers for questions.
+	"email": "willstott101@gmail.com",
+
+	//Description of your resolver for users.
+		// Limit to 74 characters in order for the entire string to always be visible within the UI.
+		// BTW, this one is exactly 74 characters.
+	"description": "This is an mcve resolver which you can be used as a template for your own.",
+	
+	
+	"type": "resolver/javascript",
+	"manifest": {
+		"main": "contents/code/example.js",
+		"scripts": [],
+		"icon": "contents/images/icon.png",
+		"resources": [
+			"contents/code/soundcloud.png",
+			"contents/code/soundcloud-icon.png",
+			"contents/code/config.ui"
+		]
+	}
+}
