@@ -20,13 +20,8 @@
 var SoundcloudResolver = Tomahawk.extend(TomahawkResolver, {
     clientId: "TiNg2DRYhBnp01DA3zNag",
     settings: {
-    	// Same as 'name' from metadata.json
-    		// TODO: Get rid of this.
         name: 'SoundCloud',
-        // Similar to 'manifest.icon' from .json
-     		// This time it's relative to this JS document.
-    		// TODO: Get rid of this.
-        icon: '../images/icon.png',
+        icon: 'soundcloud-icon.png',
         weight: 85,
         timeout: 15
     },
