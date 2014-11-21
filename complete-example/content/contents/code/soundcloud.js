@@ -17,17 +17,34 @@
  *   along with Tomahawk. If not, see <http://www.gnu.org/licenses/>.
  */
 
-var SoundcloudResolver = Tomahawk.extend(TomahawkResolver, {
+var ExampleResolver = Tomahawk.extend(TomahawkResolver, {
     clientId: "TiNg2DRYhBnp01DA3zNag",
+
+    //Should hopefully be deprecated soon.
     settings: {
-        name: 'SoundCloud',
+        name: 'Minimal Complete Verifiable Example',
         icon: 'soundcloud-icon.png',
         weight: 85,
         timeout: 15
     },
 
+    /* ==== UI control ===
+
+    This section handles presenting and recieving configuration information from the user.
+
+		e.g. Log-in username and password. Or an option to exclude remixes.
+    */
+
+    /* If present, spanner image is visible in plug-ins page.
+
+    	Called whenever tomahawk loads the resolver.
+
+    */
     getConfigUi: function () {
+
+    	// Often easier to read 
         var uiData = Tomahawk.readBase64("config.ui");
+
         return {
             "widget": uiData,
             fields: [
@@ -49,6 +66,7 @@ var SoundcloudResolver = Tomahawk.extend(TomahawkResolver, {
             ],
             images: [
                 {
+                	//Unsure if paths must be the same.
                     "soundcloud.png" : Tomahawk.readBase64("soundcloud.png")
                 }
             ]
@@ -57,10 +75,13 @@ var SoundcloudResolver = Tomahawk.extend(TomahawkResolver, {
 
 	newConfigSaved: function () {
 		var userConfig = this.getUserConfig();
+		// Check if the config has changed.
 		if ((userConfig.includeCovers != this.includeCovers) || (userConfig.includeRemixes != this.includeRemixes) || (userConfig.includeLive != this.includeLive)) {
+			// Get the new values.
 			this.includeCovers = userConfig.includeCovers;
 			this.includeRemixes = userConfig.includeRemixes;
 			this.includeLive = userConfig.includeLive;
+			//Save the values.
 			this.saveUserConfig();
 		}
 	},
@@ -387,4 +408,4 @@ var SoundcloudResolver = Tomahawk.extend(TomahawkResolver, {
 	}
 });
 
-Tomahawk.resolver.instance = SoundcloudResolver;
+Tomahawk.resolver.instance = ExampleResolver;
