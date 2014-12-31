@@ -1,0 +1,22 @@
+{
+	"name": "WimpMusic",
+	"pluginName": "wimp",
+	"author": "Will Stott",
+	"email": "willstott101@gmail.com",
+	"version": "0.0.1",
+	"website": "http://gettomahawk.com",
+	"description": "Resolves to playable tracks on Wimp or Tidal HiFi streaming services.",
+	"type": "resolver/javascript",
+	"manifest": {
+		"main": "contents/code/wimp.js",
+		"scripts": [],
+		"icon": "contents/images/icon.png",
+		"iconWhite": "contents/images/iconWhite.png",
+        "iconBackground": "contents/images/iconBackground.png",
+		"resources": [
+			"contents/code/soundcloud.png",
+			"contents/code/soundcloud-icon.png",
+			"contents/code/config.ui"
+		]
+	}
+}
