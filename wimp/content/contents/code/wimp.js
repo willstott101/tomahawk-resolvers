@@ -19,25 +19,20 @@
 
 var WimpResolver = Tomahawk.extend(TomahawkResolver, {
     //clientId: "TiNg2DRYhBnp01DA3zNag",
-    apis: {
-        'tidal': {
-            url: "https://listen.tidalhifi.com/v1/",
-            token: "sSa0ezMKgcYMYbaQ",
-            name: "TidalHiFi",
-            username: "",
-            password: ""
-        },
-        'wimp': {
-            // Untested!
-            url: "https://play.wimpmusic.com/v1/",
-            token: "rQtt0XAsYjXYIlml",
-            name: "WiMP",
-            username: "",
-            password: ""
-        }
+    api: {
+        url: "https://listen.tidalhifi.com/v1/",
+        token: "sSa0ezMKgcYMYbaQ",
+
+        username: "",
+        password: "",
+
+        userId: "",
+        countryCode: "",
+        sessionId: ""
     },
+
     settings: {
-        name: 'WiMP and Tidal',
+        name: 'TidalHiFi',
         icon: 'soundcloud-icon.png',
         weight: 85,
         timeout: 15
@@ -65,9 +60,7 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
     newConfigSaved: function () {
         var userConfig = this.getUserConfig();
 
-        // FIXME
-        var api = this.apis['tidal'];
-        if (api.username !== userConfig.user || api.password !== userConfig.password) {
+        if (this.api.username !== userConfig.user || this.api.password !== userConfig.password) {
             this.init();
         }
     },
@@ -91,35 +84,41 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
      * @param callback function(err) Callback that notifies when the resolver was initialised.
      */
     init: function (callback) {
+        var that = this;
         // Set userConfig here
         var userConfig = this.getUserConfig();
         if ( userConfig !== undefined ) {
-            //this.preferredQuality = userConfig.quality;
-            // Login to each API.
-            for (var key in this.apis) {
-                var api = this.apis[key];
-                var loginUrl = this.buildUrl(api, 'login/username', {'token':api.token});
-                var headers = {};
-                var formData = new FormData();
-                formData.append("username", api.username);
-                formData.append("password", api.password);
-                var options = {
-                    "method": "POST",
-                    "data": formData,
-                    "errorHandler": function (xhr) {
-                        for (var key in xhr.upload) {
-                            Tomahawk.log(key + ": " + xhr.upload[key]);
-                        }
-                    }
-                };
-                Tomahawk.asyncRequest(loginUrl, function (xhr) {
-                    var res = JSON.parse(xhr.responseText);
-                    Tomahawk.log("Tried WiMP API login, status: ", xhr.status);
-                }, headers, options);
-            }
+            // this.preferredQuality = userConfig.quality;
+            this.api.username = userConfig.user;
+            this.api.password = userConfig.password;
+            this.api.authenticated = false;
 
+            // Build login url
+            var url = this.buildUrl(this.api, 'login/username', {'token':this.api.token});
+            // Format request
+            var formData = {
+                "username": api.username,
+                "password": api.password
+            };
+            var options = {
+                "method": "POST",
+                "data": this.encodeData(formData)
+            };
+            var headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Length": options.data.length
+            };
+            // Perform request
+            Tomahawk.asyncRequest(url, function (xhr) {
+                // Format response
+                var res = JSON.parse(xhr.responseText);
+                that.api.userId = res['userId'];
+                that.api.countryCode = res['countryCode'];
+                that.api.sessionId = res['sessionId'];
+                that.api.authenticated = true;
+            }, headers, options);
         } else {
-            this.authenticated = false;
+            this.api.authenticated = false;
         }
 
 

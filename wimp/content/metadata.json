@@ -1,11 +1,11 @@
 {
-	"name": "WimpMusic",
+	"name": "TidalHiFi",
 	"pluginName": "wimp",
 	"author": "Will Stott",
 	"email": "willstott101@gmail.com",
 	"version": "0.0.1",
 	"website": "http://gettomahawk.com",
-	"description": "Resolves to playable tracks on Wimp or Tidal HiFi streaming services.",
+	"description": "Resolves to playable tracks on Tidal HiFi streaming services.",
 	"type": "resolver/javascript",
 	"manifest": {
 		"main": "contents/code/wimp.js",
