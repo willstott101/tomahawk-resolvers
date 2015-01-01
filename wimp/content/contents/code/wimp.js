@@ -1,7 +1,5 @@
 /* === This file is part of Tomahawk Player - <http://tomahawk-player.org> ===
  *
- *   Copyright 2012, Thierry Göckel <thierry@strayrayday.lu>
- *   Copyright 2013, Uwe L. Korn <uwelk@xhochy.com>
  *
  *   Tomahawk is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -38,6 +36,8 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
         timeout: 15
     },
 
+    resolveQueue: {},
+
     getConfigUi: function () {
         var uiData = Tomahawk.readBase64("config.ui");
         return {
@@ -66,16 +66,104 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
     },
 
     encodeData: function (data) {
-        return Object.keys(data).map(function(key) {
+        return Object.keys(data).map(function (key) {
             return [key, data[key]].map(encodeURIComponent).join("=");
         }).join("&");
-    }, 
+    },
 
-    buildUrl: function (service, action, params) {
+    encodeQuery: function (data) {
+        return Object.keys(data).map(function (key) {
+            return [key, data[key]].map(escape).join("=");
+        }).join("&");
+    },
+
+    buildUrl: function (service, action, params, rawparams) {
         if (params) {
             params = this.encodeData(params);
+        } else { params = "" }
+        if (rawparams) {
+            rawparams = this.encodeQuery(rawparams);
+        } else { rawparams = "" }
+        params += rawparams.length > 0 ? "&" : ""
+        return service.url + action + "?" + params + rawparams;
+    },
+
+    login: function (callback) {
+        var that = this;
+        // Build login url
+        var url = this.buildUrl(this.api, 'login/username', {'token':this.api.token});
+        // Format request
+        var formData = {
+            "username": this.api.username,
+            "password": this.api.password
+        };
+        var options = {
+            "method": "POST",
+            "data": this.encodeData(formData),
+            "errorHandler": function () {
+                Tomahawk.log("TidalHiFi authentication failed.");
+                that.api.authenticated = -1;
+            }
+        };
+        var headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Length": options.data.length
+        };
+        // Perform request
+        Tomahawk.asyncRequest(url, function (xhr) {
+            // Format response
+            var res = JSON.parse(xhr.responseText);
+            for (key in res) {
+                Tomahawk.log("LOGIN RESPONSE: " + key + ": " + res[key]);
+            }
+            that.api.userId = res.userId;
+            that.api.countryCode = res.countryCode;
+            that.api.sessionId = res.sessionId;
+            // We are logged in. Just need some more information.
+            that.api.authenticated = 1;
+            that.afterLogin(callback);
+        }, headers, options);
+
+        if (callback) {
+            callback(null);
         }
-        return service.url + action + "?" + params;
+    },
+
+    afterLogin: function(callback) {
+        var that = this;
+        // Build login url
+        var url = this.buildUrl(
+            this.api,
+            'users/' + this.api.userId + '/subscription',
+            {
+                'sessionId': this.api.sessionId,
+                'countryCode': this.api.countryCode
+        });
+        var options = {
+            "method": "GET"
+        };
+        var headers = {
+        };
+        // Perform request
+        Tomahawk.asyncRequest(url, function (xhr) {
+            // Typical response:
+                // {"validUntil":"2015-01-03T18:42:42.234+0000","status":"ACTIVE","subscription":{"type":"HIFI"},"highestSoundQuality":"LOSSLESS"}
+            var res = JSON.parse(xhr.responseText);
+            for (key in res) {
+                Tomahawk.log("USER SUB RESPONSE: " + key + ": " + res[key]);
+            }
+            // Currently only interested in max sound quality.
+            that.api.highestSoundQuality = res.highestSoundQuality;
+            // We are now prepared to do sound file requests.
+            that.api.authenticated = 2;
+
+        }, headers, options);
+
+        // Resolve any songs which Tomahawk tried to resolve whilst we were unauthenticated.
+        for (qid in this.resolveQueue) {
+            var q  = this.resolveQueue[qid];
+            this.resolve(qid, q.artist, q.album, q.title);
+        }
     },
 
     /**
@@ -85,40 +173,17 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
      */
     init: function (callback) {
         var that = this;
+        this.api.authenticated = 0;
+        this.resolveQueue = {};
         // Set userConfig here
         var userConfig = this.getUserConfig();
         if ( userConfig !== undefined ) {
             // this.preferredQuality = userConfig.quality;
             this.api.username = userConfig.user;
             this.api.password = userConfig.password;
-            this.api.authenticated = false;
-
-            // Build login url
-            var url = this.buildUrl(this.api, 'login/username', {'token':this.api.token});
-            // Format request
-            var formData = {
-                "username": api.username,
-                "password": api.password
-            };
-            var options = {
-                "method": "POST",
-                "data": this.encodeData(formData)
-            };
-            var headers = {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Content-Length": options.data.length
-            };
-            // Perform request
-            Tomahawk.asyncRequest(url, function (xhr) {
-                // Format response
-                var res = JSON.parse(xhr.responseText);
-                that.api.userId = res['userId'];
-                that.api.countryCode = res['countryCode'];
-                that.api.sessionId = res['sessionId'];
-                that.api.authenticated = true;
-            }, headers, options);
-        } else {
-            this.api.authenticated = false;
+            
+            // Login to the wimp api
+            this.login(callback);
         }
 
 
@@ -126,106 +191,111 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
             return this.replace( /(^|\s)([a-z])/g , function(m,p1,p2){ return p1+p2.toUpperCase(); } );
         };
         //Tomahawk.reportCapabilities(TomahawkResolverCapability.UrlLookup);
+    },
 
-        if (callback) {
-            callback(null);
+    resolve: function (qid, artist, album, title)
+    {
+        var that = this;
+
+        // If we are not yet authenticated, add the request to the queue.
+        if (this.api.authenticated === 0) {
+            if  (!this.resolveQueue.hasOwnProperty(qid)) {
+                this.resolveQueue[qid] = {
+                    'artist': artist, 
+                    'album': album, 
+                    'title': title
+                };
+            }
+            return;
         }
-    }//,
 
-    // getTrack: function (trackTitle, origTitle) {
-    //     // Filters for covers and remixes etc
-    //     /*
-    //     if ((this.includeCovers === false || this.includeCovers === undefined) && trackTitle.search(/cover/i) !== -1 && origTitle.search(/cover/i) === -1){
-    //         return null;
-    //     }
-    //     if ((this.includeRemixes === false || this.includeRemixes === undefined) && trackTitle.search(/(re)*mix/i) !== -1 && origTitle.search(/(re)*mix/i) === -1){
-    //         return null;
-    //     }
-    //     if ((this.includeLive === false || this.includeLive === undefined) && trackTitle.search(/live/i) !== -1 && origTitle.search(/live/i) === -1){
-    //         return null;
-    //     } else {
-    //         return trackTitle;
-    //     }
-    //     */
-    //     return trackTitle;
-    // },
+        var query = title + " " + artist;
+        query += album ? " " + album : "";
+        // Format for the url
+        query = query.split("+").join("");
+        query = query.split(" ").join("+");
 
-    // resolve: function (qid, artist, album, title)
-    // {
-    //     var query;
-    //     if (artist !== "") {
-    //         query = encodeURIComponent(artist) + "+";
-    //     }
-    //     if (title !== "") {
-    //         query += encodeURIComponent(title);
-    //     }
-    //     var apiQuery = "https://api.soundcloud.com/tracks.json?consumer_key=TiNg2DRYhBnp01DA3zNag&filter=streamable&q=" + query;
-    //     var that = this;
-    //     var empty = {
-    //         results: [],
-    //         qid: qid
-    //     };
-    //     Tomahawk.asyncRequest(apiQuery, function (xhr) {
-    //         var resp = JSON.parse(xhr.responseText);
-    //         if (resp.length !== 0){
-    //             var results = [];
-    //             for (i = 0; i < resp.length; i++) {
-    //                 // Need some more validation here
-    //                 // This doesnt help it seems, or it just throws the error anyhow, and skips?
-    //                 if (typeof(resp[i]) == 'undefined' || resp[i] === null) {
-    //                     continue;
-    //                 }
+        var url = this.buildUrl(
+            this.api,
+            'search/tracks',
+            {
+                'sessionId': this.api.sessionId,
+                'countryCode': this.api.countryCode,
+                'limit': 25
+            },
+            { 'query': query }
+        );
+        var empty = {
+            results: [],
+            qid: qid
+        };
+        Tomahawk.log("About to try and resolve: " + url);
+        Tomahawk.asyncRequest(url, function (xhr) {
+            var resp = JSON.parse(xhr.responseText).items;
+            Tomahawk.log("Got " + resp.length + " responses.");
+            if (resp.length > 0)
+            {
+                var results = [];
+                for (i = 0; i < resp.length; i++) {
 
-    //                 // Check for streamable tracks only
-    //                 if (!resp[i].streamable) {
-    //                     continue;
-    //                 }
+                    // Check for streamable tracks only
+                    if (!resp[i].allowStreaming || !resp[i].streamReady) {
+                        // I have no real idea what streamReady means.
+                        continue;
+                    }
+                    var result = {
+                        // Might be better not to assume these exist.
+                        artist: resp[i].artist.name,
+                        album: resp[i].album.title,
+                        track: resp[i].title,
+                        source: that.settings.name
+                    };
+                    var streamUrl = that.buildUrl(
+                        that.api,
+                        'tracks/' + resp[i].id + '/streamUrl',
+                        {
+                            'sessionId': that.api.sessionId,
+                            'countryCode': that.api.countryCode,
+                            // TODO: Don't assume lossless
+                            'soundQuality': 'LOSSLESS'
+                    });
+                    Tomahawk.log("before sync request ");
+                    // Get the stream information (sync for now).
+                    // TODO: async
+                    var streamInfo = JSON.parse(Tomahawk.syncRequest(streamUrl));
 
-    //                 if (typeof(resp[i].title) != 'undefined' && resp[i].title !== null) {
-    //                     // Check whether the artist and title (if set) are in the returned title, discard otherwise
-    //                     // But also, the artist could be the username
-    //                     if (resp[i].title.toLowerCase().indexOf(artist.toLowerCase()) === -1) {
-    //                         continue;
-    //                     }
-    //                     if (resp[i].title.toLowerCase().indexOf(title.toLowerCase()) === -1) {
-    //                         continue;
-    //                     }
+                    for (key in streamInfo) {
+                        Tomahawk.log("Stream response: " + key + ": " + streamInfo[key]);
+                    }
 
-    //                     var result = {
-    //                         artist: artist,
-    //                         bitrate: 128,
-    //                         mimetype: "audio/mpeg",
-    //                         score: 0.85,
-    //                         source: that.settings.name
-    //                     };
-    //                     if (that.getTrack(resp[i].title, title)) {
-    //                         result.track = title;
-    //                     } else {
-    //                         continue;
-    //                     }
-
-    //                     result.duration = resp[i].duration / 1000;
-    //                     result.year = resp[i].release_year;
-    //                     result.url = resp[i].stream_url + ".json?client_id=TiNg2DRYhBnp01DA3zNag";
-    //                     if (typeof(resp[i].permalink_url) != 'undefined' && resp[i].permalink_url !== null) {
-    //                         result.linkUrl = resp[i].permalink_url;
-    //                     }
-    //                     results.push(result);
-    //                 }
-    //             }
-    //             if (results.length > 0) {
-    //                 Tomahawk.addTrackResults({
-    //                     qid: qid,
-    //                     results: [results[0]]
-    //                 });
-    //             } else {
-    //                 Tomahawk.addTrackResults(empty);
-    //             }
-    //         } else {
-    //             Tomahawk.addTrackResults(empty);
-    //         }
-    //     });
-    // },
+                    if (streamInfo.hasOwnProperty("soundQuality")) {
+                        if (streamInfo.soundQuality == "LOSSLESS") {
+                            result.mimetype = "audio/flac";
+                            result.score = 0.95;
+                        } else {
+                            result.bitrate = 128;
+                            result.score = 0.85;
+                            result.mimetype = "audio/mpeg";
+                        }
+                        result.url = streamInfo.url;
+                        results.push(result);
+                        // Only bother going through the motions for the first result.
+                        break;
+                    }
+                }
+                if (results.length > 0) {
+                    Tomahawk.addTrackResults({
+                        qid: qid,
+                        results: [results[0]]
+                    });
+                } else {
+                    Tomahawk.addTrackResults(empty);
+                }
+            } else {
+                Tomahawk.addTrackResults(empty);
+            }
+        });
+    }
 
     // search: function (qid, searchString)
     // {
