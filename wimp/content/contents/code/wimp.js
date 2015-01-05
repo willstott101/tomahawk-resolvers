@@ -19,14 +19,20 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
     //clientId: "TiNg2DRYhBnp01DA3zNag",
     api: {
         url: "https://listen.tidalhifi.com/v1/",
-        token: "sSa0ezMKgcYMYbaQ",
 
+        // Sent for login
+        token: "sSa0ezMKgcYMYbaQ",
         username: "",
         password: "",
 
+        // Sent for api requests
         userId: "",
         countryCode: "",
-        sessionId: ""
+        sessionId: "",
+
+        // Useful information
+        authenticated: 0,
+        highestSoundQuality: "LOSSLESS" // Just try for lossless by default
     },
 
     settings: {
@@ -257,7 +263,7 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
                             'sessionId': that.api.sessionId,
                             'countryCode': that.api.countryCode,
                             // TODO: Don't assume lossless
-                            'soundQuality': 'LOSSLESS'
+                            'soundQuality': that.api.highestSoundQuality
                     });
                     Tomahawk.log("before sync request ");
                     // Get the stream information (sync for now).
@@ -272,12 +278,15 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
                         if (streamInfo.soundQuality == "LOSSLESS") {
                             result.mimetype = "audio/flac";
                             result.score = 0.95;
+                            //result.bitrate = 700;
                         } else {
+                            // TODO: Verify / Improve this
                             result.bitrate = 128;
                             result.score = 0.85;
                             result.mimetype = "audio/mpeg";
                         }
                         result.url = streamInfo.url;
+                        result.checked = true;
                         results.push(result);
                         // Only bother going through the motions for the first result.
                         break;
