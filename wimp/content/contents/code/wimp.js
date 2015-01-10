@@ -30,6 +30,10 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
         countryCode: "",
         sessionId: "",
 
+        // State information
+        // TODO: Garbage collection
+        chunks: {},
+
         // Useful information
         authenticated: 0,
         highestSoundQuality: "LOSSLESS" // Just try for lossless by default
@@ -196,7 +200,8 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
         String.prototype.capitalize = function(){
             return this.replace( /(^|\s)([a-z])/g , function(m,p1,p2){ return p1+p2.toUpperCase(); } );
         };
-        //Tomahawk.reportCapabilities(TomahawkResolverCapability.UrlLookup);
+        
+        Tomahawk.reportCapabilities(TomahawkResolverCapability.UrlLookup);
     },
 
     resolve: function (qid, artist, album, title)
@@ -237,73 +242,115 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
         };
         Tomahawk.log("About to try and resolve: " + url);
         Tomahawk.asyncRequest(url, function (xhr) {
-            var resp = JSON.parse(xhr.responseText).items;
-            Tomahawk.log("Got " + resp.length + " responses.");
-            if (resp.length > 0)
+            var response = JSON.parse(xhr.responseText).items;
+            Tomahawk.log("Got " + response.length + " responses.");
+            if (response.length > 0)
             {
                 var results = [];
-                for (i = 0; i < resp.length; i++) {
+                for (i = 0; i < response.length; i++) {
+                    var track = response[i];
+                    // {
+                    // album: {id: 15528913, title: "The Best of Both Worlds", cover: "8c495ce5-200f-407b-a44e-770aa8e9af00"},
+                    // cover: "8c495ce5-200f-407b-a44e-770aa8e9af00",
+                    // id: 15528913,
+                    // title: "The Best of Both Worlds",
+                    // allowStreaming: true,
+                    // artist: {id: 4878559, name: "Charles Jenkins & Fellowship Chicago"},
+                    // id: 4878559,
+                    // name: "Charles Jenkins & Fellowship Chicago",
+                    // copyright: "(P) 2012 Inspired People Music. All rights reserved. / Inspired People Music",
+                    // duration: 349,
+                    // id: 15528917,
+                    // popularity: 14,
+                    // premiumStreamingOnly: false,
+                    // streamReady: true,
+                    // streamStartDate: "2013-03-24T23:00:00.000+0000",
+                    // title: "Awesome",
+                    // trackNumber: 4,
+                    // url: "http://www.wimpmusic.com/track/15528917",
+                    // version: null,
+                    // volumeNumber: 1 }
 
                     // Check for streamable tracks only
-                    if (!resp[i].allowStreaming || !resp[i].streamReady) {
+                    if (!track.allowStreaming || !track.streamReady) {
                         // I have no real idea what streamReady means.
                         continue;
                     }
+                    Tomahawk.log("At least one of which was streamable.");
                     var result = {
+                        source: that.settings.name,
                         // Might be better not to assume these exist.
-                        artist: resp[i].artist.name,
-                        album: resp[i].album.title,
-                        track: resp[i].title,
-                        source: that.settings.name
+                        artist: track.artist.name,
+                        track: track.title,
+                        linkurl: track.url,
                     };
-                    var streamUrl = that.buildUrl(
+                    if (track.duration) result.duration = track.duration;
+                    if (track.album) {
+                        if (track.album.trackNumber) result.albumpos = track.album.trackNumber;
+                        if (track.album.title) result.album = track.album.title;
+                    }
+
+                    var url = that.buildUrl(
                         that.api,
-                        'tracks/' + resp[i].id + '/streamUrl',
+                        'tracks/' + track.id + '/streamUrl',
                         {
                             'sessionId': that.api.sessionId,
                             'countryCode': that.api.countryCode,
-                            // TODO: Don't assume lossless
                             'soundQuality': that.api.highestSoundQuality
                     });
-                    Tomahawk.log("before sync request ");
-                    // Get the stream information (sync for now).
-                    // TODO: async
-                    var streamInfo = JSON.parse(Tomahawk.syncRequest(streamUrl));
-
-                    for (key in streamInfo) {
-                        Tomahawk.log("Stream response: " + key + ": " + streamInfo[key]);
-                    }
-
-                    if (streamInfo.hasOwnProperty("soundQuality")) {
-                        if (streamInfo.soundQuality == "LOSSLESS") {
-                            result.mimetype = "audio/flac";
-                            result.score = 0.95;
-                            //result.bitrate = 700;
-                        } else {
-                            // TODO: Verify / Improve this
-                            result.bitrate = 128;
-                            result.score = 0.85;
-                            result.mimetype = "audio/mpeg";
+                    Tomahawk.asyncRequest(url, function (xhr) {
+                        var response = JSON.parse(xhr.responseText);
+                        // {
+                        // playTimeLeftInMinutes: -1 // Seems useless
+                        // soundQuality: "HIGH" // or "LOSSLESS"
+                        // trackId: 14686194
+                        // url: "???..." } // Can be mp4 or flac
+                        for (key in response) {
+                            Tomahawk.log("Stream response: " + key + ": " + response[key]);
                         }
-                        result.url = streamInfo.url;
+                        if (response.soundQuality == "LOSSLESS") {
+                            result.score = 0.9;
+                            result.mimetype = "audio/flac";
+                        } else if (response.soundQuality == "HIGH") {
+                            result.mimetype = "audio/mp4";
+                            result.score = 0.85;
+                        }
+                         else if (response.soundQuality == "LOW") {
+                            result.mimetype = "audio/mp4";
+                            result.score = 0.7;
+                        }
                         result.checked = true;
+                        result.url = response.url;
+
+                        Tomahawk.log("Adding result from TidalHiFi: " + qid);
+                        for (key in result) {
+                            Tomahawk.log("result." + key + " = " + result[key]);
+                        }
+
                         results.push(result);
-                        // Only bother going through the motions for the first result.
-                        break;
-                    }
-                }
-                if (results.length > 0) {
-                    Tomahawk.addTrackResults({
-                        qid: qid,
-                        results: [results[0]]
+                        Tomahawk.addTrackResults({qid:qid, results:results});
                     });
-                } else {
-                    Tomahawk.addTrackResults(empty);
+                    // Todo: By using a valid score, return them all.
+                    break;
                 }
             } else {
                 Tomahawk.addTrackResults(empty);
             }
         });
+    },
+
+    getStreamUrl: function (qid, urn) {
+        var that = this;
+        // We need vlc to use this header.
+        // Range: bytes=12582912-17825791
+        var lastByte = that.api.chunks[urn];
+        that.api.chunks[urn] += that.api.chunkSize;
+        Tomahawk.reportStreamUrl(qid, urn, {
+            'Range': 'bytes=' + lastByte + '-' + that.api.chunks[urn],
+            //'Authorization': 'GoogleLogin auth=' + this._token,
+            //'X-Device-ID'  : this._deviceId
+        });
+        Tomahawk.log("getStreamUrl(" + qid + ", " + urn);
     }
 
     // search: function (qid, searchString)
