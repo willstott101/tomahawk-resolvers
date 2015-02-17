@@ -21,7 +21,7 @@ var WimpResolver = Tomahawk.extend(TomahawkResolver, {
         url: "https://listen.tidalhifi.com/v1/",
 
         // Sent for login
-        token: "sSa0ezMKgcYMYbaQ",
+        token: "P5Xbeo5LFvESeDy6",
         username: "",
         password: "",
 
